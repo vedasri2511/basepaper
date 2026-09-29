@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+
+# Data samples (Optional depending on size, but we'll include it for the demo, so we won't ignore dataset_c unless requested, actually let's just ignore large things, but we generated it so it's small)
