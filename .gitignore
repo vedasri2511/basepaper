@@ -16,3 +16,6 @@ frontend/.env.local
 .DS_Store
 
 # Data samples (Optional depending on size, but we'll include it for the demo, so we won't ignore dataset_c unless requested, actually let's just ignore large things, but we generated it so it's small)
+
+# Model Checkpoints & Artifacts
+checkpoints/

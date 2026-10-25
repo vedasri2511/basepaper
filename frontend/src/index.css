@@ -10,7 +10,7 @@
   --danger: #e84118;
   --danger-glow: rgba(232, 65, 24, 0.4);
   --success: #4cd137;
-  
+
   --font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
@@ -27,7 +27,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-image: 
+  background-image:
     radial-gradient(circle at 15% 50%, rgba(108, 92, 231, 0.08), transparent 25%),
     radial-gradient(circle at 85% 30%, rgba(0, 206, 201, 0.08), transparent 25%);
 }
@@ -322,4 +322,176 @@ body {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Supplementary RCA Dashboard Styles */
+.status-warning {
+  background: rgba(243, 156, 18, 0.15);
+  color: #f39c12;
+  border: 1px solid rgba(243, 156, 18, 0.3);
+}
+
+.alert-box {
+  padding: 14px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.alert-warning {
+  background: rgba(243, 156, 18, 0.1);
+  border: 1px solid rgba(243, 156, 18, 0.3);
+  color: #f1c40f;
+}
+
+.alert-info {
+  background: rgba(0, 206, 201, 0.1);
+  border: 1px solid rgba(0, 206, 201, 0.25);
+  color: var(--accent-color);
+}
+
+/* Diagnostics Cards */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metric-pill {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--panel-border);
+}
+
+.metric-pill-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+}
+
+.metric-pill-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* RCA Ranking Table */
+.ranking-table-container {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+
+.ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+
+.ranking-table th {
+  padding: 12px 16px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.ranking-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.ranking-table tr.top-rank {
+  background: rgba(232, 65, 24, 0.08);
+  border-left: 3px solid var(--danger);
+}
+
+.rank-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.rank-badge-1 {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 0 10px var(--danger-glow);
+}
+
+.rank-badge-other {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-muted);
+}
+
+/* Feature Attribution Bars */
+.feature-bars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.feature-bar-item {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--panel-border);
+}
+
+.feature-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.feature-modality-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+  text-transform: uppercase;
+}
+
+.modality-metric {
+  background: rgba(108, 92, 231, 0.3);
+  color: #a29bfe;
+  border: 1px solid rgba(108, 92, 231, 0.4);
+}
+
+.modality-trace {
+  background: rgba(0, 206, 201, 0.25);
+  color: #00cec9;
+  border: 1px solid rgba(0, 206, 201, 0.4);
+}
+
+.modality-log {
+  background: rgba(253, 203, 110, 0.25);
+  color: #ffeaa7;
+  border: 1px solid rgba(253, 203, 110, 0.4);
+}
+
+.feature-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.feature-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }

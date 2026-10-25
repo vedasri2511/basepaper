@@ -1,81 +1,151 @@
-from fastapi import FastAPI, HTTPException
+import os
+import sys
+from typing import Dict, List, Optional, Any
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import torch
-import numpy as np
-import requests
-import json
-import time
+from pydantic import BaseModel, Field
+
+# Ensure repository root is on python path
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from src.services.rca_service import RCAService
 
 app = FastAPI(
-    title="HolisticRCA Live Cloud API",
-    description="True Real-Time Integration with Live Kubernetes Cluster via Prometheus",
-    version="2.0.0"
+    title="HolisticRCA Diagnostic & Explanation API",
+    description="End-to-End Holistic Root Cause Analysis with Multi-Modal Positional GNN and Mask Learning",
+    version="1.8.0"
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-PROMETHEUS_URL = "http://localhost:9090"
 
-class InferenceRequest(BaseModel):
-    timestamp_start: int
-    timestamp_end: int
-    system_id: str
+# ---------------------------------------------------------
+# Request & Response Schemas
+# ---------------------------------------------------------
 
-class InferenceResponse(BaseModel):
-    faulty_entities: dict
-    recommended_actions: list
+class AnalysisRequest(BaseModel):
+    timestamp: Optional[int] = Field(None, description="Exact observation window bucket timestamp (e.g. 1696002220)")
+    timestamp_start: Optional[int] = Field(None, description="Fallback start timestamp from legacy UI")
+    timestamp_end: Optional[int] = Field(None, description="Optional end timestamp")
+    system_id: Optional[str] = Field("dataset_c_cluster", description="Monitored cluster identifier")
+    run_explanation: bool = Field(True, description="Whether to optimize relation and feature masks for RCA")
+    epochs: int = Field(50, ge=5, le=200, description="Mask optimization iterations (default: 50)")
+    target_entity: Optional[str] = Field(None, description="Specific entity to target for explanation, or auto-detect")
 
-@app.post("/predict", response_model=InferenceResponse)
-def predict_root_cause(request: InferenceRequest):
+
+class HealthResponse(BaseModel):
+    status: str
+    is_initialized: bool
+    init_error: Optional[str] = None
+    device: str
+    checkpoint: Dict[str, Any]
+    dataset_info: Dict[str, Any]
+    experimental_notice: str
+
+
+# ---------------------------------------------------------
+# API Endpoints
+# ---------------------------------------------------------
+
+@app.get("/health", response_model=HealthResponse)
+@app.get("/api/health", response_model=HealthResponse)
+def get_health_status():
     """
-    Queries Live Prometheus server for CPU usage across the microservices.
-    Identifies real-time CPU throttling or failures in the Hipstershop cluster.
+    Returns service health, checkpoint availability, and dataset window metadata.
+    Does not assert unvalidated generalizability.
+    """
+    service = RCAService.get_instance()
+    return service.get_service_status()
+
+
+@app.get("/api/windows")
+def list_observation_windows():
+    """
+    Returns all 60 chronological Dataset C observation windows with their
+    ground-truth labels for reference in the interactive dashboard.
     """
     try:
-        import subprocess
-        
-        # Query the live Kubernetes cluster for pod statuses
-        result = subprocess.check_output(['kubectl', 'get', 'pods', '--no-headers'], text=True)
-        lines = result.strip().split('\n')
-        
-        faulty_entities = {}
-        recommendations = []
-        
-        # Real-time Anomaly Detection: Flag any pod that isn't fully Ready
-        for line in lines:
-            if not line: continue
-            parts = line.split()
-            pod_name = parts[0]
-            ready_status = parts[1] # e.g. '1/1' or '0/1'
-            status = parts[2]
-            
-            # If the pod says '0/1' ready, or it's 'CrashLoopBackOff', it's a fault!
-            if ready_status.startswith('0/') or status != 'Running':
-                # Extract the base service name (e.g. 'checkoutservice-78b6bcbcc7-gmxhl' -> 'checkoutservice')
-                service_name = pod_name.split('-')[0] 
-                
-                if 'service' not in faulty_entities:
-                    faulty_entities['service'] = []
-                
-                if service_name not in faulty_entities['service']:
-                    faulty_entities['service'].append(service_name)
-                    recommendations.append(f"LIVE ALERT: {service_name} is in '{status}' state! (Pod: {pod_name})")
-                    recommendations.append(f"Action required: Check crash logs or scaling policies for {service_name}.")
-
-        if not faulty_entities:
-            recommendations.append("System is healthy. Live Kubernetes orchestrator shows all 10 microservices operating normally.")
-            
-        return InferenceResponse(
-            faulty_entities=faulty_entities,
-            recommended_actions=recommendations
-        )
-        
+        service = RCAService.get_instance()
+        windows = service.get_available_windows()
+        return {
+            'total_windows': len(windows),
+            'windows': windows
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to load observation windows: {str(e)}")
+
+
+@app.post("/predict")
+@app.post("/api/analyze")
+def analyze_observation_window(request: AnalysisRequest):
+    """
+    Main RCA Analysis endpoint:
+    Runs frozen HolisticRCA inference and Section IV.F mask learning on the selected window.
+    Supports both legacy /predict and canonical /api/analyze endpoints.
+    """
+    try:
+        service = RCAService.get_instance()
+        if not service.is_initialized:
+            success = service.initialize()
+            if not success:
+                raise HTTPException(status_code=503, detail=f"RCAService initialization failed: {service._init_error}")
+
+        # Resolve timestamp from request
+        target_ts = request.timestamp
+        if target_ts is None and request.timestamp_start is not None:
+            # Map timestamp_start to the closest available window timestamp
+            available_ts = sorted(service.window_index_map.keys())
+            if not available_ts:
+                raise HTTPException(status_code=500, detail="No observation windows available.")
+
+            # Find closest timestamp >= timestamp_start, or nearest
+            matching = [t for t in available_ts if t >= request.timestamp_start]
+            target_ts = matching[0] if matching else available_ts[-1]
+
+        if target_ts is None:
+            # Default to first positive validation window if none provided
+            val_ds = service.val_dataset
+            if val_ds and len(val_ds) > 0:
+                target_ts = val_ds.timestamps[0]
+            else:
+                target_ts = list(service.window_index_map.keys())[0]
+
+        result = service.run_rca(
+            timestamp=target_ts,
+            run_explanation=request.run_explanation,
+            epochs=request.epochs,
+            target_entity=request.target_entity
+        )
+
+        # Add legacy compatibility fields for older components if needed
+        result['faulty_entities'] = {
+            'service': [p['entity_name'] for p in result['per_entity_predictions'] if p['is_fault']]
+        }
+        rec_actions = []
+        if result['is_fault_predicted']:
+            top_e = result.get('top_faulty_entity', 'unknown_service')
+            rec_actions.append(f"AI ALERT: Anomaly detected on {top_e}. Root-cause explanation generated below.")
+            rec_actions.append(f"Action: Inspect top attributed observability features and relation topology.")
+        else:
+            rec_actions.append("System is normal in this observation window. Background baseline explanation generated.")
+        result['recommended_actions'] = rec_actions
+
+        return result
+
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RCA Analysis failed: {str(e)}")
+
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
